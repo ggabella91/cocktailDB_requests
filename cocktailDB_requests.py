@@ -1,4 +1,6 @@
 import requests
+import queries
+import time
 
 def main():
 
@@ -12,7 +14,7 @@ def main():
 		choice = input(f"Enter the number corresponding to your chosen action: ")
 
 		if choice == "1":
-			get_drinks()
+			get_drink_details()
 		elif choice == "2":
 			list_cocktails()
 		elif choice == "3":
@@ -21,6 +23,7 @@ def main():
 			return False
 		else:
 			print("Invalid option. Please try again :)\n")
+
 
 
 def list_cocktails():
@@ -40,56 +43,122 @@ def list_cocktails():
 	print("\n")
 
 
-def get_drinks():
+def get_drink_details():
 
 	while True:
 		drink = input("\nPlease enter a cocktail name: ")
-		g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?s={drink}")
 		
-		if g.json()["drinks"] is None:
-			print("Invalid cocktail name. Please try again :)\n")
-		else:
+		print("\nStarting query:\n")
+		start_time = time.time()
+		query = queries.query_cocktail(drink)
+
+		if query:
 			break
-	
+		else:
+			print(time.time())
+			print("\nNo matching results from query. Starting API call.")
+			g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?s={drink}")
+		
+			if g.json()["drinks"] is None:
+				print("Invalid cocktail name. Please try again :)\n")
+			else:
+				break
+		
 	ingredients  = []
+	measures = []
+	if query:
+		print("Query complete. Match found!\n")
+		stop_time = time.time() - start_time
+		print(f"Query duration: {stop_time}\n")
+		print(f"\nAbout {query['name']}:\n")
+		print(f"Category: {query['category']}\n")
+		print(f"IBA Category: {query['IBA_category']}\n")
+		alcoholic_int_map = {0 : "Non alcoholic", 1 : "Alcoholic", 2 : "Optional alcohol"}
+		print(f"Alcoholic: {alcoholic_int_map[query['alcoholic']]}\n")
+		print(f"Ingredients for {query['name']}:\n")
+		for item in query["ingredient measures"]:
+			print(f"{item}")
+		print(f"\nHow to make a {query['name']}:\n")
+		print(query["instructions"])
+		##### GET INGREDIENTS FROM DATABASE ###########
+	else:
+		for k,v in g.json()["drinks"][0].items():
+			if "strIngredient" in k:
+				if v is not None:
+					ingredients.append(v)
+			elif "strMeasure" in k:
+				if v is not None:
+					measures.append(v)
+			
+		ingredient_measures = tuple(zip(measures, ingredients))
 
-	for k,v in g.json()["drinks"][0].items():
-		if "strIngredient" in k:
-			if v is not None:
-				ingredients.append(v)
+		drink_name = g.json()["drinks"][0].get("strDrink")
+		foreign_drink_id = g.json()["drinks"][0].get("idDrink")
+		category = g.json()["drinks"][0].get("strCategory")
+		cat_IBA = g.json()["drinks"][0].get("strIBA")
+		alc = g.json()["drinks"][0].get("strAlcoholic")
+		alcoholic_map = {"Non alcoholic": 0, "Alcoholic": 1, "Optional alcohol": 2}
+		is_alcoholic = alcoholic_map[alc]
+		glass = g.json()["drinks"][0].get("strGlass")
+		instructions = g.json()["drinks"][0].get("strInstructions")
 
-	gd = [d.get("strInstructions") for d in g.json()["drinks"]]
+		print("\nAPI call complete!\n")
+		stop_time = time.time() - start_time
+		print(f"{stop_time}\n")
 
-	print(f"\nIngredients for {drink}:\n")
+		drink_details = {"name" : drink_name, "category" : category,
+						"IBA_category" : cat_IBA, "alcoholic": is_alcoholic,
+						"foreign_id" : foreign_drink_id, "glass" : glass,
+						"instructions" : instructions, 
+						"ingredient measures" : ingredient_measures}
+		
+		#### INSERT DATA INTO THE SQL DATABASE #######
+		queries.insert_drink_details(drink_details)
+		##############################################
 
-	for item in ingredients:
-		print(item)
+		print(f"\nIngredients for {drink_name}:\n")
 
-	print(f"\nHow to make a {drink}:\n")
-	print(gd[0])
+		for item in ingredient_measures:
+			print(f"{item[0]} {item[1]}")
+
+		print(f"\nHow to make a {drink_name}:\n")
+		print(instructions)
 
 
 def get_ingredient_details():
 	
 	while True:
 		ingredient = input("\nPlease enter an ingredient name: ")
-		g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?i={ingredient}")
 
-		if g.json()["ingredients"] is None:
-			print("\nInvalid ingredient name. Please try again :)\n")
-		else:
+		query = queries.query_ingredient(ingredient)
+
+		if query != -10:
 			break
-	
-	ig = [d.get("strDescription") for d in g.json()["ingredients"]]
+		else:
+			g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?i={ingredient}")
 
-	print(f"\nAbout {ingredient}:\n")
+			if g.json()["ingredients"] is None:
+				print("\nInvalid ingredient name. Please try again :)\n")
+			else:
+				break
 	
-	if ig[0] is None:
-		print("No description available for this item. Sorry!")
+	if query != -10:
+		if len(query) == 2:
+			print(f"\nAbout {ingredient}:\n")
+			print(f"{query[1]}")
 	else:
-		print(ig[0])
+		ingredient_name = g.json()["ingredients"][0].get("strIngredient")
+		ingred_desc = g.json()["ingredients"][0].get("strDescription")
+
+		print(f"\nAbout {ingredient_name}:\n")
+		
+		if ingred_desc is None:
+			print("No description available for this item. Sorry!")
+		else:
+			queries.insert_ingredient_description(query, ingred_desc)
+			print(f"\n{ingred_desc}")
+
 
 # END OF PROGRAM FUNCTIONALITY DECLARATIONS
 # PROGRAM EXECUTION STARTS BELOW THIS LINE
-
 main()
