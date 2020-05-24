@@ -1,7 +1,7 @@
 import mysql.connector
 from connection_config import Connection
 
-cn = Connection()
+cn = Connection() ## Connection is a simple class with string-type attributes for the local MySQL connection password and database name
 
 connect = mysql.connector.connect(user='root', host = '127.0.0.1', port = '3306', passwd = cn.password, db = cn.database , buffered = True)
 connect.autocommit = True
