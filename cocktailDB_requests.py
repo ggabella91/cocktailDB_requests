@@ -30,17 +30,20 @@ def list_cocktails():
 	
 	while True:
 		letter = input("\nPlease enter a letter: ")
-		if letter.isalpha():
+		if letter.isalpha() and len(letter) == 1:
 			break
 		else:
-			print("Invalid character. Please enter a letter.\n")
+			print("\nInvalid input. Please enter a single letter.\n")
 
 	g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?f={letter}")
 
 	print(f"\nCocktails that start with the letter {letter}:\n")
-	for d in g.json()["drinks"]:
-		print(d.get("strDrink"))
-	print("\n")
+	if g.json()["drinks"]:
+		for d in g.json()["drinks"]:
+			print(d.get("strDrink"))
+		print("\n")
+	else:
+		print(f"No matches for the letter '{letter}.' Please try again.")
 
 
 def get_drink_details():
@@ -55,8 +58,7 @@ def get_drink_details():
 		if query:
 			break
 		else:
-			print(time.time())
-			print("\nNo matching results from query. Starting API call.")
+			print("No matching results from query. Starting API call.")
 			g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?s={drink}")
 		
 			if g.json()["drinks"] is None:
@@ -69,12 +71,13 @@ def get_drink_details():
 	if query:
 		print("Query complete. Match found!\n")
 		stop_time = time.time() - start_time
-		print(f"Query duration: {stop_time}\n")
-		print(f"\nAbout {query['name']}:\n")
+		print(f"Query duration: {round(stop_time, 5)} seconds.\n")
+		print(f"About {query['name']}:\n")
 		print(f"Category: {query['category']}\n")
 		print(f"IBA Category: {query['IBA_category']}\n")
 		alcoholic_int_map = {0 : "Non alcoholic", 1 : "Alcoholic", 2 : "Optional alcohol"}
 		print(f"Alcoholic: {alcoholic_int_map[query['alcoholic']]}\n")
+		print(f"Glass: {query['glass']}\n")
 		print(f"Ingredients for {query['name']}:\n")
 		for item in query["ingredient measures"]:
 			print(f"{item}")
@@ -104,7 +107,7 @@ def get_drink_details():
 
 		print("\nAPI call complete!\n")
 		stop_time = time.time() - start_time
-		print(f"{stop_time}\n")
+		print(f"API call duration: {round(stop_time,5)} seconds.\n")
 
 		drink_details = {"name" : drink_name, "category" : category,
 						"IBA_category" : cat_IBA, "alcoholic": is_alcoholic,
@@ -132,7 +135,7 @@ def get_ingredient_details():
 
 		query = queries.query_ingredient(ingredient)
 
-		if query != -10:
+		if query[0] != -10 and len(query) == 2:
 			break
 		else:
 			g = requests.get(f"https://www.thecocktaildb.com/api/json/v1/1/search.php?i={ingredient}")
@@ -142,10 +145,9 @@ def get_ingredient_details():
 			else:
 				break
 	
-	if query != -10:
-		if len(query) == 2:
-			print(f"\nAbout {ingredient}:\n")
-			print(f"{query[1]}")
+	if len(query) == 2:
+		print(f"\nAbout {ingredient}:\n")
+		print(f"{query[1]}")
 	else:
 		ingredient_name = g.json()["ingredients"][0].get("strIngredient")
 		ingred_desc = g.json()["ingredients"][0].get("strDescription")
@@ -155,7 +157,7 @@ def get_ingredient_details():
 		if ingred_desc is None:
 			print("No description available for this item. Sorry!")
 		else:
-			queries.insert_ingredient_description(query, ingred_desc)
+			queries.insert_ingredient_description(ingredient_name, ingred_desc)
 			print(f"\n{ingred_desc}")
 
 
